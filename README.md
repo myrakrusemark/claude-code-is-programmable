@@ -2,6 +2,8 @@
 
 This repository demonstrates how to use Claude Code programmatically, showcasing examples in different programming languages. Watch [this video](https://youtu.be/2TIXl2rlA6Q) to understand why this is so important for next generation engineering.
 
+<img src="images/programmable-agentic-coding.png" alt="Claude Code is Programmable" width="800">
+
 ## Quick Start
 
 First off - run these right away to understand how important this is:
