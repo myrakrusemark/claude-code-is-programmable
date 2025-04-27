@@ -1,6 +1,22 @@
 # Claude Code is Programmable
 
-This repository demonstrates how to use Claude Code programmatically, showcasing examples in different programming languages.
+This repository demonstrates how to use Claude Code programmatically, showcasing examples in different programming languages. Watch [this video](https://youtu.be/2TIXl2rlA6Q) to understand why this is so important for next generation engineering.
+
+## Quick Start
+
+First off - run these right away to understand how important this is:
+
+```bash
+# Claude Code example (with only Write and Edit tools allowed)
+claude -p "make a hello.js script that prints hello" --allowedTools "Write" "Edit"
+
+# Aider equivalent example
+aider --message "make a hello.js script that prints hello"
+```
+
+Here's the big trick - with Claude Code, you can call ANY TOOL IN ANY ORDER IN NATURAL LANGUAGE.
+
+Watch [this video](https://youtu.be/2TIXl2rlA6Q) to internalize how important this is for next generation engineering.
 
 ## Setup
 
