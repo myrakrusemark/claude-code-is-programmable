@@ -20,6 +20,8 @@ Here's the big trick - with Claude Code, you can call ANY TOOL IN ANY ORDER IN N
 
 Watch [this video](https://youtu.be/2TIXl2rlA6Q) to internalize how important this is for next generation engineering. View the brief anthropic documentation [here](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/tutorials#use-claude-as-a-unix-style-utility) and a more comprehensive write up on [agentic coding here](https://www.anthropic.com/engineering/claude-code-best-practices). The Claude Code team is doing incredible work.
 
+You can also use script with [Aider](https://aider.chat/) to do similar things limited to strictly AI Coding (which is still incredibly useful). Check out the documentation [here](https://aider.chat/docs/scripting.html).
+
 ## Setup
 
 ### Configuration Files
