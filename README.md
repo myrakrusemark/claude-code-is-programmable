@@ -11,7 +11,7 @@ First off - run these right away to understand how important this is:
 claude -p "make a hello.js script that prints hello" --allowedTools "Write" "Edit"
 
 # Aider equivalent example
-aider --message "make a hello.js script that prints hello"
+aider --message "make a hello.js script that prints hello" hello.js
 ```
 
 Here's the big trick - with Claude Code, you can call ANY TOOL IN ANY ORDER IN NATURAL LANGUAGE.
