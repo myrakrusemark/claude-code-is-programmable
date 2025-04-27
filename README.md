@@ -2,25 +2,91 @@
 
 This repository demonstrates how to use Claude Code programmatically, showcasing examples in different programming languages.
 
+## Setup
+
+### Configuration Files
+
+1. **MCP (Multi-call Protocol) Configuration**
+   - Copy the sample configuration file to create your own:
+     ```bash
+     cp .mcp.sample.json .mcp.json
+     ```
+   - Edit `.mcp.json` to add your Notion API key in the `OPENAPI_MCP_HEADERS` section:
+     ```json
+     {
+       "mcpServers": {
+         "notionApi": {
+           "command": "npx",
+           "args": ["-y", "@notionhq/notion-mcp-server"],
+           "env": {
+             "OPENAPI_MCP_HEADERS": "{\"Authorization\": \"Bearer YOUR_NOTION_API_KEY\", \"Notion-Version\": \"2022-06-28\" }"
+           }
+         }
+       }
+     }
+     ```
+
+2. **Environment Variables**
+   - Copy the sample environment file:
+     ```bash
+     cp .env.sample .env
+     ```
+   - Add the following API keys to your `.env` file:
+     ```
+     NOTION_INTERNAL_INTEGRATION_SECRET=your_notion_integration_secret
+     ANTHROPIC_API_KEY=your_anthropic_api_key
+     OPENAI_API_KEY=your_openai_api_key
+     ```
+
 ## File Descriptions
 
 ### Shell Scripts
 - `claude_code_is_programmable_1.sh`: Simple shell script that uses Claude Code's CLI to generate a basic "hello.js" script with limited allowed tools.
+  ```bash
+  sh claude_code_is_programmable_1.sh
+  ```
 - `aider_is_programmable_1.sh`: Similar script using Aider to create a "hello.js" file.
+  ```bash
+  sh aider_is_programmable_1.sh
+  ```
 - `reset.sh`: Utility script to clean up branches and directories created by the demo scripts.
+  ```bash
+  sh reset.sh
+  ```
 
 ### Python Files
 - `claude_code_is_programmable_2.py`: Python script that executes Claude Code to create a TypeScript CLI todo app, with permissions for Edit, Replace, Bash, and Create tools.
-- `claude_code_is_programmable_3.py`: Advanced Python script integrating Claude Code with Notion API for todo management, including rich console output and streaming results.
+  ```bash
+  uv run claude_code_is_programmable_2.py
+  ```
+- `claude_code_is_programmable_3.py`: Advanced Python script integrating Claude Code with Notion API for todo management, including rich console output and streaming results. Requires a Notion page name as an argument.
+  ```bash
+  uv run claude_code_is_programmable_3.py "My Notion Page"
+  ```
 - `aider_is_programmable_2.py`: Python script that uses Aider to create a TypeScript todo application with git operations.
+  ```bash
+  uv run aider_is_programmable_2.py
+  ```
 
 ### JavaScript Files
 - `claude_code_is_programmable_2.js`: JavaScript version of the Claude Code script that creates a TypeScript todo app, with permissions for Edit, Replace, Bash, and Create tools.
+  ```bash
+  bun claude_code_is_programmable_2.js
+  ```
 - `aider_is_programmable_2.js`: JavaScript version of the Aider script for creating a TypeScript todo app with git operations.
+  ```bash
+  bun aider_is_programmable_2.js
+  ```
 
 ### Bonus Directory
 - `starter_notion_agent.py`: A starter template for creating a Notion agent using the OpenAI Agent SDK.
-- `claude_code_inside_openai_agent_sdk_4_bonus.py`: An advanced implementation that integrates Claude Code within the OpenAI Agent SDK, demonstrating how to process Notion todos with an agent-based architecture.
+  ```bash
+  uv run bonus/starter_notion_agent.py
+  ```
+- `claude_code_inside_openai_agent_sdk_4_bonus.py`: An advanced implementation that integrates Claude Code within the OpenAI Agent SDK. Requires a Notion page name as an argument.
+  ```bash
+  uv run bonus/claude_code_inside_openai_agent_sdk_4_bonus.py "My Notion Page"
+  ```
 
 ## Core Tools Available in Claude Code
 
