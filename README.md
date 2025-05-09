@@ -60,6 +60,7 @@ You can also use [Aider](https://aider.chat/) as a programmable ai coding tool t
      OPENAI_API_KEY=your_openai_api_key
      ```
    - Note: The voice_to_claude_code.py script specifically requires both ANTHROPIC_API_KEY and OPENAI_API_KEY to be set.
+   - The anthropic_search.py script requires ANTHROPIC_API_KEY to be set.
 
 ## File Descriptions
 
@@ -89,6 +90,10 @@ You can also use [Aider](https://aider.chat/) as a programmable ai coding tool t
 - `aider_is_programmable_2.py`: Python script that uses Aider to create a TypeScript todo application with git operations.
   ```bash
   uv run aider_is_programmable_2.py
+  ```
+- `anthropic_search.py`: A self-contained Python script for searching the web using Anthropic's Claude AI with web search capabilities.
+  ```bash
+  ./anthropic_search.py "your search query"
   ```
 
 ### JavaScript Files
