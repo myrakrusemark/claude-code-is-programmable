@@ -113,6 +113,8 @@ logging.getLogger("audio_recorder").setLevel(logging.ERROR)
 logging.getLogger("whisper").setLevel(logging.ERROR)
 logging.getLogger("faster_whisper.transcribe").setLevel(logging.ERROR)
 logging.getLogger("openai").setLevel(logging.ERROR)
+logging.getLogger("openai.http_client").setLevel(logging.ERROR)  # Suppress HTTP request logging
+logging.getLogger("openai._client").setLevel(logging.ERROR)  # Suppress client logging
 
 console = Console()
 

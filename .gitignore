@@ -33,3 +33,5 @@ hello.js
 specs/
 
 **/.claude/settings.local.json
+
+output/
