@@ -342,20 +342,29 @@ class ClaudeCodeAssistant:
             response = client.chat.completions.create(
                 model="gpt-4.1-mini",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=1024
+                temperature=0.1,
+                max_tokens=1024,
             )
 
             compressed_text = response.choices[0].message.content
-            log.info(f"Compressed response from {len(text)} to {len(compressed_text)} characters")
-
-            # Log before and after for comparison
-            log.info(f"Original text (first 200 chars): {text[:200]}...")
-            log.info(f"Compressed text (first 200 chars): {compressed_text[:200]}...")
-
+            log.info(
+                f"Compressed response from {len(text)} to {len(compressed_text)} characters"
+            )
             # Display in console
-            console.print(f"[bold cyan]Original response:[/bold cyan] {text[:100]}...")
-            console.print(f"[bold green]Compressed for speech:[/bold green] {compressed_text[:100]}...")
+            console.print(
+                Panel(
+                    f"[bold cyan]Original response:[/bold cyan]\n{text[:200]}...",
+                    title="Original Text",
+                    border_style="cyan",
+                )
+            )
+            console.print(
+                Panel(
+                    f"[bold green]Compressed for speech:[/bold green]\n{compressed_text}",
+                    title="Compressed Text",
+                    border_style="green",
+                )
+            )
 
             return compressed_text
 
@@ -428,18 +437,24 @@ class ClaudeCodeAssistant:
 
         # Execute Claude Code as a simple subprocess
         log.info("Starting Claude Code subprocess...")
-        cmd = ["claude", "-p", prompt, "--allowedTools", "Bash", "Edit", "Write", "GlobTool", "GrepTool", "LSTool"]
+        cmd = [
+            "claude",
+            "-p",
+            prompt,
+            "--allowedTools",
+            "Bash",
+            "Edit",
+            "Write",
+            "GlobTool",
+            "GrepTool",
+            "LSTool",
+        ]
 
         console.print("\n[bold blue]🔄 Running Claude Code...[/bold blue]")
 
         try:
             # Use simple subprocess.run for synchronous execution
-            process = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True
-            )
+            process = subprocess.run(cmd, capture_output=True, text=True, check=True)
 
             # Get the response
             response = process.stdout
@@ -459,7 +474,9 @@ class ClaudeCodeAssistant:
             log.error(f"{error_msg}\nError: {e.stderr[:500]}...")
 
             error_response = "I'm sorry, but I encountered an error while processing your request. Please try again."
-            self.conversation_history.append({"role": "assistant", "content": error_response})
+            self.conversation_history.append(
+                {"role": "assistant", "content": error_response}
+            )
 
             return error_response
 
