@@ -531,14 +531,7 @@ class ClaudeCodeAssistant:
             "-p",
             prompt,
             "--allowedTools",
-            "Bash",
-            "Edit",
-            "Write",
-            "GlobTool",
-            "GrepTool",
-            "LSTool",
-            "Replace",
-        ]
+        ] + DEFAULT_CLAUDE_TOOLS
 
         console.print("\n[bold blue]🔄 Running Claude Code...[/bold blue]")
 
