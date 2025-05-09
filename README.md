@@ -59,6 +59,7 @@ You can also use [Aider](https://aider.chat/) as a programmable ai coding tool t
      ANTHROPIC_API_KEY=your_anthropic_api_key
      OPENAI_API_KEY=your_openai_api_key
      ```
+   - Note: The voice_to_claude_code.py script specifically requires both ANTHROPIC_API_KEY and OPENAI_API_KEY to be set.
 
 ## File Descriptions
 
@@ -98,6 +99,12 @@ You can also use [Aider](https://aider.chat/) as a programmable ai coding tool t
 - `aider_is_programmable_2.js`: JavaScript version of the Aider script for creating a TypeScript todo app with git operations.
   ```bash
   bun aider_is_programmable_2.js
+  ```
+
+### Voice to Claude Code
+- `voice_to_claude_code.py`: A voice-enabled Claude Code assistant that allows you to interact with Claude Code using speech commands. Combines RealtimeSTT for speech recognition and OpenAI TTS for speech output.
+  ```bash
+  uv run voice_to_claude_code/voice_to_claude_code.py
   ```
 
 ### Bonus Directory
