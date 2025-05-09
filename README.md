@@ -130,3 +130,11 @@ You can also use [Aider](https://aider.chat/) as a programmable ai coding tool t
 - Write: Create or overwrite files
 - NotebookRead/Edit: Work with Jupyter notebooks
 - WebFetch: Get content from websites
+
+## Claude Code response formats
+
+```sh
+claude -p 'hello, run git ls-files, how many files are in the current directory' --output-format text > test.txt
+claude -p 'hello, run git ls-files, how many files are in the current directory' --output-format json > test.json
+claude -p --continue 'hello, run git ls-files, how many files are in the current directory' --output-format stream-json > test.stream.json
+```

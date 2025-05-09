@@ -71,6 +71,31 @@ STT_MODEL = "small.en"  # Options: tiny.en, base.en, small.en, medium.en, large-
 TTS_VOICE = "nova"  # Options: alloy, echo, fable, onyx, nova, shimmer
 DEFAULT_CLAUDE_TOOLS = ["Bash", "Edit", "Write", "GlobTool", "GrepTool", "LSTool"]
 
+# Prompt templates
+COMPRESS_PROMPT = """
+You are an assistant that makes long technical responses more concise for voice output.
+Your task is to rephrase the following text to be shorter and more conversational,
+while preserving all key information. Focus only on the most important details.
+Be brief but clear, as this will be spoken aloud.
+
+Original text:
+{text}
+
+Return only the compressed text, without any explanation or introduction.
+"""
+
+CLAUDE_PROMPT = """
+# Voice-Enabled Claude Code Assistant
+
+You are a helpful assistant that's being used via voice commands. Execute the user's request using your tools.
+
+When asked to read files, return the entire file content.
+
+{formatted_history}
+
+Now help the user with their latest request.
+"""
+
 # Initialize logging
 logging.basicConfig(
     level=logging.INFO,
@@ -310,17 +335,8 @@ class ClaudeCodeAssistant:
         log.info("Compressing response for speech...")
 
         try:
-            prompt = f"""
-You are an assistant that makes long technical responses more concise for voice output.
-Your task is to rephrase the following text to be shorter and more conversational,
-while preserving all key information. Focus only on the most important details.
-Be brief but clear, as this will be spoken aloud.
-
-Original text:
-{text}
-
-Return only the compressed text, without any explanation or introduction.
-"""
+            # Use the prompt template from the constants
+            prompt = COMPRESS_PROMPT.format(text=text)
 
             # Call OpenAI with GPT-4.1-mini to compress the text
             response = client.chat.completions.create(
@@ -408,17 +424,7 @@ Return only the compressed text, without any explanation or introduction.
 
         # Prepare the prompt for Claude Code including conversation history
         formatted_history = self.format_conversation_history()
-        prompt = f"""
-# Voice-Enabled Claude Code Assistant
-
-You are a helpful assistant that's being used via voice commands. Execute the user's request using your tools.
-
-When asked to read files, return the entire file content.
-
-{formatted_history}
-
-Now help the user with their latest request.
-"""
+        prompt = CLAUDE_PROMPT.format(formatted_history=formatted_history)
 
         # Execute Claude Code as a simple subprocess
         log.info("Starting Claude Code subprocess...")
