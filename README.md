@@ -117,7 +117,7 @@ You can also use [Aider](https://aider.chat/) as a programmable ai coding tool t
 - Batch: Run multiple tools in parallel
 - Glob: Find files matching patterns
 - Grep: Search file contents with regex
-- LS: List directory contents
+- LS: **List** directory contents
 - Read: Read file contents
 - Edit: Make targeted edits to files
 - Write: Create or overwrite files

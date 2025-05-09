@@ -31,6 +31,5 @@ hello.js
 .mcp.json
 
 specs/
-ai_docs/
 
-.claude
+**/.claude/settings.local.json
