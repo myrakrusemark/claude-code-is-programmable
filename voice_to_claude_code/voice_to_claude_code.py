@@ -305,16 +305,63 @@ class ClaudeCodeAssistant:
 
         return result_container["text"]
 
+    async def compress_speech(self, text: str) -> str:
+        """Compress the response text to be more concise for speech"""
+        log.info("Compressing response for speech...")
+
+        try:
+            prompt = f"""
+You are an assistant that makes long technical responses more concise for voice output.
+Your task is to rephrase the following text to be shorter and more conversational,
+while preserving all key information. Focus only on the most important details.
+Be brief but clear, as this will be spoken aloud.
+
+Original text:
+{text}
+
+Return only the compressed text, without any explanation or introduction.
+"""
+
+            # Call OpenAI with GPT-4.1-mini to compress the text
+            response = client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=1024
+            )
+
+            compressed_text = response.choices[0].message.content
+            log.info(f"Compressed response from {len(text)} to {len(compressed_text)} characters")
+
+            # Log before and after for comparison
+            log.info(f"Original text (first 200 chars): {text[:200]}...")
+            log.info(f"Compressed text (first 200 chars): {compressed_text[:200]}...")
+
+            # Display in console
+            console.print(f"[bold cyan]Original response:[/bold cyan] {text[:100]}...")
+            console.print(f"[bold green]Compressed for speech:[/bold green] {compressed_text[:100]}...")
+
+            return compressed_text
+
+        except Exception as e:
+            log.error(f"Error compressing speech: {str(e)}")
+            console.print(f"[bold red]Error compressing speech:[/bold red] {str(e)}")
+            # Return original text if compression fails
+            return text
+
     async def speak(self, text: str):
         """Convert text to speech using OpenAI TTS"""
         log.info(f'Speaking: "{text[:50]}..."')
 
         try:
-            # Generate speech
+            # Compress text before converting to speech
+            compressed_text = await self.compress_speech(text)
+
+            # Generate speech with compressed text
             response = client.audio.speech.create(
                 model="tts-1",
                 voice=TTS_VOICE,
-                input=text,
+                input=compressed_text,
                 speed=1.0,
             )
 
