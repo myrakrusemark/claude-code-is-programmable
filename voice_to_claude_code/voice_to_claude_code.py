@@ -46,17 +46,19 @@ Press Ctrl+C to exit.
 
 import os
 import sys
+import json
 import asyncio
 import tempfile
 import subprocess
 import sounddevice as sd
 import soundfile as sf
 import numpy as np
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
 from rich.logging import RichHandler
+from rich.syntax import Syntax
 from dotenv import load_dotenv
 import openai
 from openai import OpenAI
@@ -109,7 +111,7 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 def invoke_claude_code(prompt: str) -> dict:
     """
     Invokes Claude Code programmatically with a specific prompt.
-    All tools are available by default.
+    All tools are available by default and output is streamed in real-time.
 
     Args:
         prompt (str): The instruction to send to Claude Code
@@ -120,28 +122,73 @@ def invoke_claude_code(prompt: str) -> dict:
     log.info("=" * 60)
     log.info(f"invoke_claude_code(prompt_length={len(prompt)})")
 
+    full_output = []  # To collect all output
+
     try:
         # Use the constant but don't pass it to Claude (allowing all tools by default)
         log.info(f"Default tools list (for reference): {DEFAULT_CLAUDE_TOOLS}")
         log.info("Using all available tools (not restricted)")
 
-        cmd = ["claude", "-p", prompt]
+        # Set up command with streaming output format
+        cmd = [
+            "claude",
+            "-p",
+            prompt,
+            "--output-format",
+            "stream-json"
+        ]
         log.info(f"Command: {' '.join(cmd[:3])}... (truncated)")
 
-        # Execute Claude Code as a subprocess
-        log.info("Starting Claude Code subprocess...")
+        # Execute Claude Code as a subprocess with line buffering
+        log.info("Starting Claude Code subprocess with streaming output...")
         process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1  # Line buffered
         )
 
-        stdout, stderr = process.communicate()
-        log.info(f"Process finished with return code: {process.returncode}")
+        # Process and display streaming output in real-time
+        console.print("\n[bold blue]🔄 Streaming Claude Code output:[/bold blue]")
 
-        if process.returncode == 0:
-            log.info(f"Claude Code succeeded, output length: {len(stdout)}")
-            return {"success": True, "message": stdout, "error": None}
+        from rich.syntax import Syntax
+
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+
+            # Display the streaming output
+            try:
+                syntax = Syntax(line, "json", theme="monokai", line_numbers=False)
+                console.print(syntax)
+            except Exception:
+                # Fall back to plain output if syntax highlighting fails
+                console.print(line.strip())
+
+            # Collect the output
+            full_output.append(line)
+
+        # Read any errors
+        stderr = process.stderr.read()
+
+        # Get return code and check result
+        return_code = process.wait()
+        log.info(f"Process finished with return code: {return_code}")
+
+        if return_code == 0:
+            log.info(f"Claude Code succeeded, collected {len(full_output)} output lines")
+            console.print("[bold green]✅ Claude Code completed successfully[/bold green]")
+            return {
+                "success": True,
+                "message": "".join(full_output),
+                "error": None
+            }
         else:
-            log.error(f"Claude Code failed with error: {stderr[:500]}...")
+            error_msg = f"Claude Code failed with exit code: {return_code}"
+            log.error(f"{error_msg}\nError: {stderr[:500]}...")
+            console.print(f"[bold red]❌ {error_msg}[/bold red]")
             return {
                 "success": False,
                 "message": "Claude Code execution failed",
@@ -151,6 +198,7 @@ def invoke_claude_code(prompt: str) -> dict:
     except Exception as e:
         error_msg = f"Error in invoke_claude_code: {str(e)}"
         log.error(error_msg)
+        console.print(f"[bold red]❌ {error_msg}[/bold red]")
         return {
             "success": False,
             "message": "Claude Code execution failed",
@@ -164,32 +212,10 @@ class ClaudeCodeAssistant:
     def __init__(self, initial_prompt: Optional[str] = None):
         log.info("Initializing Claude Code Assistant")
         self.recorder = None
-        self.conversation_history = []
         self.initial_prompt = initial_prompt
 
-        # Set up recorder and get starter context
+        # Set up recorder only
         self.setup_recorder()
-        self.starter_context = self.get_starter_context()
-
-    def get_starter_context(self) -> str:
-        """Get the initial context by running git ls-files"""
-        log.info("Getting starter context...")
-        try:
-            # Try to get files via git ls-files
-            process = subprocess.run(
-                ["git", "ls-files"], capture_output=True, text=True, check=False
-            )
-
-            if process.returncode == 0:
-                files = process.stdout.strip().split("\n")
-                log.info(f"Found {len(files)} files using git ls-files")
-                return f"# File Listing\n\nUse this to help you get started:\n\n```\n{process.stdout}\n```"
-            else:
-                log.warning("Failed to run git ls-files, falling back to empty context")
-                return ""
-        except Exception as e:
-            log.error(f"Error getting starter context: {str(e)}")
-            return ""
 
     def setup_recorder(self):
         """Set up the RealtimeSTT recorder"""
@@ -211,19 +237,7 @@ class ClaudeCodeAssistant:
 
         log.info(f"STT recorder initialized with model {STT_MODEL}")
 
-    def format_conversation_history(self) -> str:
-        """Format the conversation history in the required format"""
-        if not self.conversation_history:
-            return ""
-
-        formatted_history = "# Conversation History\n\n"
-
-        for entry in self.conversation_history:
-            role = entry["role"].capitalize()
-            content = entry["content"]
-            formatted_history += f"## {role}\n{content}\n\n"
-
-        return formatted_history
+    # Removed format_conversation_history method as we no longer track history
 
     async def listen(self) -> str:
         """Listen for user speech and convert to text"""
@@ -335,46 +349,95 @@ class ClaudeCodeAssistant:
             log.info("Trigger word not detected, skipping")
             return None
 
-        # Add to conversation history
-        self.conversation_history.append({"role": "user", "content": message})
+        # Always use --continue flag to let Claude Code handle conversation continuity
+        log.info("Using --continue flag to continue previous conversation")
+        cmd = ["claude", "--continue", "--output-format", "stream-json", "--print", message]
 
-        # Prepare the prompt for Claude Code
-        formatted_history = self.format_conversation_history()
-        prompt = f"""
-# Voice-Enabled Claude Code Assistant
+        # Execute Claude Code as a subprocess with streaming output
+        log.info(f"Command: {' '.join(cmd[:3])}... (truncated)")
+        log.info("Starting Claude Code subprocess with streaming output...")
 
-You are a helpful assistant that's being used via voice commands. Execute the user's request using your tools.
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1  # Line buffered
+        )
 
-{self.starter_context}
+        # Collect the final text response
+        final_text_response = []
+        current_message_content = []
 
-{formatted_history}
+        # Process and display streaming output in real-time
+        console.print("\n[bold blue]🔄 Running Claude Code...[/bold blue]")
 
-Now help the user with their latest request.
-"""
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
 
-        # Invoke Claude Code with all tools available
-        result = invoke_claude_code(prompt)
+            # Skip empty lines
+            if not line.strip():
+                continue
 
-        if result["success"]:
-            # Extract Claude's response
-            response = result["message"]
+            try:
+                # Parse the JSON line
+                json_obj = json.loads(line)
 
-            # Add response to history
-            self.conversation_history.append({"role": "assistant", "content": response})
+                # Display formatted JSON for debugging
+                syntax = Syntax(json.dumps(json_obj, indent=2), "json", theme="monokai", line_numbers=False)
+                console.print(syntax)
 
-            # Display the response
-            console.print(Panel(title="Claude", renderable=Markdown(response)))
+                # Extract and handle different types of JSON responses
+                if json_obj.get("type") == "message" and json_obj.get("role") == "assistant":
+                    # Process assistant message
+                    if "content" in json_obj:
+                        for content_item in json_obj["content"]:
+                            if content_item.get("type") == "text":
+                                # Extract text content
+                                current_message_content.append(content_item.get("text", ""))
+                                # Display the text content to the user
+                                console.print(f"[bold green]Claude:[/bold green] {content_item.get('text', '')}")
+
+                # When we get a system cost message, we know the interaction is complete
+                if json_obj.get("role") == "system" and "result" in json_obj:
+                    final_result = json_obj.get("result", "")
+                    if final_result:
+                        final_text_response.append(final_result)
+
+            except json.JSONDecodeError as e:
+                # Not valid JSON, just display the raw line
+                log.warning(f"Invalid JSON: {line.strip()}")
+                console.print(f"[yellow]{line.strip()}[/yellow]")
+
+        # Read any errors
+        stderr = process.stderr.read()
+
+        # Get return code and check result
+        return_code = process.wait()
+        log.info(f"Process finished with return code: {return_code}")
+
+        if return_code == 0:
+            # Combine all text content into a single response
+            # Use current_message_content if available, otherwise use final_text_response
+            if current_message_content:
+                response = "\n".join(current_message_content)
+            else:
+                response = "\n".join(final_text_response)
+
+            log.info(f"Claude Code succeeded, extracted text response of length: {len(response)}")
+
+            # Display the final response
+            if response:
+                console.print(Panel(title="Claude Final Response", renderable=Markdown(response)))
 
             return response
         else:
-            error_msg = f"Error: {result['error'] or 'Unknown error'}"
-            log.error(error_msg)
+            error_msg = f"Claude Code failed with exit code: {return_code}"
+            log.error(f"{error_msg}\nError: {stderr[:500]}...")
 
             error_response = "I'm sorry, but I encountered an error while processing your request. Please try again."
-            self.conversation_history.append(
-                {"role": "assistant", "content": error_response}
-            )
-
             return error_response
 
     async def conversation_loop(self):
