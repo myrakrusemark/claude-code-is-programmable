@@ -82,6 +82,13 @@ Your task is to rephrase the following text to be shorter and more conversationa
 while preserving all key information. Focus only on the most important details.
 Be brief but clear, as this will be spoken aloud.
 
+IMPORTANT HANDLING FOR CODE BLOCKS:
+- Do not include full code blocks in your response
+- Instead, briefly mention "I've created code for X" or "Here's a script that does Y"
+- For large code blocks, just say something like "I've written a Python function that handles user authentication"
+- DO NOT attempt to read out the actual code syntax
+- Only describe what the code does in 1 sentences maximum
+
 Original text:
 {text}
 
@@ -117,7 +124,9 @@ logging.getLogger("audio_recorder").setLevel(logging.ERROR)
 logging.getLogger("whisper").setLevel(logging.ERROR)
 logging.getLogger("faster_whisper.transcribe").setLevel(logging.ERROR)
 logging.getLogger("openai").setLevel(logging.ERROR)
-logging.getLogger("openai.http_client").setLevel(logging.ERROR)  # Suppress HTTP request logging
+logging.getLogger("openai.http_client").setLevel(
+    logging.ERROR
+)  # Suppress HTTP request logging
 logging.getLogger("openai._client").setLevel(logging.ERROR)  # Suppress client logging
 
 console = Console()
@@ -234,7 +243,11 @@ def invoke_claude_code(prompt: str) -> dict:
 
 
 class ClaudeCodeAssistant:
-    def __init__(self, conversation_id: Optional[str] = None, initial_prompt: Optional[str] = None):
+    def __init__(
+        self,
+        conversation_id: Optional[str] = None,
+        initial_prompt: Optional[str] = None,
+    ):
         log.info("Initializing Claude Code Assistant")
         self.recorder = None
         self.initial_prompt = initial_prompt
@@ -245,7 +258,7 @@ class ClaudeCodeAssistant:
             self.conversation_id = conversation_id
         else:
             # Generate a short 5-character ID
-            self.conversation_id = ''.join(str(uuid.uuid4()).split('-')[0][:5])
+            self.conversation_id = "".join(str(uuid.uuid4()).split("-")[0][:5])
         log.info(f"Using conversation ID: {self.conversation_id}")
 
         # Ensure output directory exists
@@ -266,7 +279,7 @@ class ClaudeCodeAssistant:
         if self.conversation_file.exists():
             try:
                 log.info(f"Loading existing conversation from {self.conversation_file}")
-                with open(self.conversation_file, 'r') as f:
+                with open(self.conversation_file, "r") as f:
                     history = yaml.safe_load(f)
                     if history is None:
                         log.info("Empty conversation file, starting new conversation")
@@ -278,19 +291,23 @@ class ClaudeCodeAssistant:
                 log.info("Starting with empty conversation history")
                 return []
         else:
-            log.info(f"No existing conversation found at {self.conversation_file}, starting new conversation")
+            log.info(
+                f"No existing conversation found at {self.conversation_file}, starting new conversation"
+            )
             return []
 
     def save_conversation_history(self) -> None:
         """Save conversation history to YAML file"""
         try:
             log.info(f"Saving conversation history to {self.conversation_file}")
-            with open(self.conversation_file, 'w') as f:
+            with open(self.conversation_file, "w") as f:
                 yaml.dump(self.conversation_history, f, default_flow_style=False)
             log.info(f"Saved {len(self.conversation_history)} conversation turns")
         except Exception as e:
             log.error(f"Error saving conversation history: {e}")
-            console.print(f"[bold red]Failed to save conversation history: {e}[/bold red]")
+            console.print(
+                f"[bold red]Failed to save conversation history: {e}[/bold red]"
+            )
 
     def setup_recorder(self):
         """Set up the RealtimeSTT recorder"""
@@ -603,27 +620,42 @@ async def main():
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Voice-enabled Claude Code assistant")
-    parser.add_argument('--id', '-i', type=str, help='Unique ID for the conversation. If provided and exists, will load existing conversation.')
-    parser.add_argument('--prompt', '-p', type=str, help='Initial prompt to process immediately (will be prefixed with trigger word)')
+    parser.add_argument(
+        "--id",
+        "-i",
+        type=str,
+        help="Unique ID for the conversation. If provided and exists, will load existing conversation.",
+    )
+    parser.add_argument(
+        "--prompt",
+        "-p",
+        type=str,
+        help="Initial prompt to process immediately (will be prefixed with trigger word)",
+    )
     args = parser.parse_args()
 
     # Create assistant instance with conversation ID and initial prompt
-    assistant = ClaudeCodeAssistant(
-        conversation_id=args.id,
-        initial_prompt=args.prompt
-    )
+    assistant = ClaudeCodeAssistant(conversation_id=args.id, initial_prompt=args.prompt)
 
     # Show some helpful information about the conversation
     if args.id:
         if assistant.conversation_file.exists():
             log.info(f"Resuming existing conversation with ID: {args.id}")
-            console.print(f"[bold green]Resuming conversation {args.id} with {len(assistant.conversation_history)} turns[/bold green]")
+            console.print(
+                f"[bold green]Resuming conversation {args.id} with {len(assistant.conversation_history)} turns[/bold green]"
+            )
         else:
             log.info(f"Starting new conversation with user-provided ID: {args.id}")
-            console.print(f"[bold blue]Starting new conversation with ID: {args.id}[/bold blue]")
+            console.print(
+                f"[bold blue]Starting new conversation with ID: {args.id}[/bold blue]"
+            )
     else:
-        log.info(f"Starting new conversation with auto-generated ID: {assistant.conversation_id}")
-        console.print(f"[bold blue]Starting new conversation with auto-generated ID: {assistant.conversation_id}[/bold blue]")
+        log.info(
+            f"Starting new conversation with auto-generated ID: {assistant.conversation_id}"
+        )
+        console.print(
+            f"[bold blue]Starting new conversation with auto-generated ID: {assistant.conversation_id}[/bold blue]"
+        )
 
     log.info(f"Conversation will be saved to: {assistant.conversation_file}")
     console.print(f"[bold]Conversation file: {assistant.conversation_file}[/bold]")
@@ -631,7 +663,9 @@ async def main():
     # Process initial prompt if provided
     if args.prompt:
         log.info(f"Processing initial prompt: {args.prompt}")
-        console.print(f"[bold cyan]Processing initial prompt: {args.prompt}[/bold cyan]")
+        console.print(
+            f"[bold cyan]Processing initial prompt: {args.prompt}[/bold cyan]"
+        )
 
         # Create a full prompt that includes the trigger word to ensure it's processed
         initial_prompt = f"{TRIGGER_WORDS[0]} {args.prompt}"
