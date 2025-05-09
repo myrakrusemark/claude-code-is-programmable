@@ -213,6 +213,7 @@ class ClaudeCodeAssistant:
         log.info("Initializing Claude Code Assistant")
         self.recorder = None
         self.initial_prompt = initial_prompt
+        self.first_prompt = True  # Initialize first_prompt flag as true for first run
 
         # Set up recorder only
         self.setup_recorder()
@@ -349,9 +350,17 @@ class ClaudeCodeAssistant:
             log.info("Trigger word not detected, skipping")
             return None
 
-        # Always use --continue flag to let Claude Code handle conversation continuity
-        log.info("Using --continue flag to continue previous conversation")
-        cmd = ["claude", "--continue", "--output-format", "stream-json", "--print", message]
+        # For the first prompt, don't use --continue
+        # For subsequent prompts, use --continue flag
+        if self.first_prompt:
+            # First prompt - start a new conversation
+            log.info("First prompt - starting new Claude Code session")
+            cmd = ["claude", "--output-format", "stream-json", "-p", message]
+            self.first_prompt = False  # Set to false after first run
+        else:
+            # Subsequent prompts - continue existing conversation
+            log.info("Using --continue flag to continue previous conversation")
+            cmd = ["claude", "--continue", "--output-format", "stream-json", "--print", message]
 
         # Execute Claude Code as a subprocess with streaming output
         log.info(f"Command: {' '.join(cmd[:3])}... (truncated)")
