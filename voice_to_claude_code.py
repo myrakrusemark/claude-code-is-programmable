@@ -74,7 +74,15 @@ import logging
 TRIGGER_WORDS = ["claude", "cloud", "sonnet", "sonny"]  # List of possible trigger words
 STT_MODEL = "small.en"  # Options: tiny.en, base.en, small.en, medium.en, large-v2
 TTS_VOICE = "nova"  # Options: alloy, echo, fable, onyx, nova, shimmer
-DEFAULT_CLAUDE_TOOLS = ["Bash", "Edit", "Write", "GlobTool", "GrepTool", "LSTool", "Replace"]
+DEFAULT_CLAUDE_TOOLS = [
+    "Bash",
+    "Edit",
+    "Write",
+    "GlobTool",
+    "GrepTool",
+    "LSTool",
+    "Replace",
+]
 
 # Prompt templates
 COMPRESS_PROMPT = """
