@@ -47,13 +47,17 @@ Press Ctrl+C to exit.
 import os
 import sys
 import json
+import yaml
+import uuid
 import asyncio
 import tempfile
 import subprocess
 import sounddevice as sd
 import soundfile as sf
 import numpy as np
+import argparse
 from typing import List, Dict, Any, Optional, Union
+from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
@@ -230,14 +234,63 @@ def invoke_claude_code(prompt: str) -> dict:
 
 
 class ClaudeCodeAssistant:
-    def __init__(self, initial_prompt: Optional[str] = None):
+    def __init__(self, conversation_id: Optional[str] = None, initial_prompt: Optional[str] = None):
         log.info("Initializing Claude Code Assistant")
         self.recorder = None
         self.initial_prompt = initial_prompt
-        self.conversation_history = []  # Bring back conversation tracking
 
-        # Set up recorder only
+        # Set up conversation ID and history
+        if conversation_id:
+            # Use the provided ID
+            self.conversation_id = conversation_id
+        else:
+            # Generate a short 5-character ID
+            self.conversation_id = ''.join(str(uuid.uuid4()).split('-')[0][:5])
+        log.info(f"Using conversation ID: {self.conversation_id}")
+
+        # Ensure output directory exists
+        self.output_dir = Path("output")
+        self.output_dir.mkdir(exist_ok=True)
+
+        # Set up the conversation file path
+        self.conversation_file = self.output_dir / f"{self.conversation_id}.yml"
+
+        # Load existing conversation or start a new one
+        self.conversation_history = self.load_conversation_history()
+
+        # Set up recorder
         self.setup_recorder()
+
+    def load_conversation_history(self) -> List[Dict[str, str]]:
+        """Load conversation history from YAML file if it exists"""
+        if self.conversation_file.exists():
+            try:
+                log.info(f"Loading existing conversation from {self.conversation_file}")
+                with open(self.conversation_file, 'r') as f:
+                    history = yaml.safe_load(f)
+                    if history is None:
+                        log.info("Empty conversation file, starting new conversation")
+                        return []
+                    log.info(f"Loaded {len(history)} conversation turns")
+                    return history
+            except Exception as e:
+                log.error(f"Error loading conversation history: {e}")
+                log.info("Starting with empty conversation history")
+                return []
+        else:
+            log.info(f"No existing conversation found at {self.conversation_file}, starting new conversation")
+            return []
+
+    def save_conversation_history(self) -> None:
+        """Save conversation history to YAML file"""
+        try:
+            log.info(f"Saving conversation history to {self.conversation_file}")
+            with open(self.conversation_file, 'w') as f:
+                yaml.dump(self.conversation_history, f, default_flow_style=False)
+            log.info(f"Saved {len(self.conversation_history)} conversation turns")
+        except Exception as e:
+            log.error(f"Error saving conversation history: {e}")
+            console.print(f"[bold red]Failed to save conversation history: {e}[/bold red]")
 
     def setup_recorder(self):
         """Set up the RealtimeSTT recorder"""
@@ -469,6 +522,9 @@ class ClaudeCodeAssistant:
             # Add to conversation history
             self.conversation_history.append({"role": "assistant", "content": response})
 
+            # Save the updated conversation history
+            self.save_conversation_history()
+
             return response
 
         except subprocess.CalledProcessError as e:
@@ -479,6 +535,9 @@ class ClaudeCodeAssistant:
             self.conversation_history.append(
                 {"role": "assistant", "content": error_response}
             )
+
+            # Save the updated conversation history even when there's an error
+            self.save_conversation_history()
 
             return error_response
 
@@ -492,6 +551,8 @@ class ClaudeCodeAssistant:
                 f"Speak to interact. Include one of these trigger words to activate: {', '.join(TRIGGER_WORDS)}.\n"
                 f"The assistant will listen, process with Claude Code, and respond using voice '{TTS_VOICE}'.\n"
                 f"STT model: {STT_MODEL}\n"
+                f"Conversation ID: {self.conversation_id}\n"
+                f"Saving conversation to: {self.conversation_file}\n"
                 f"Press Ctrl+C to exit."
             )
         )
@@ -540,8 +601,47 @@ async def main():
     """Main entry point for the assistant"""
     log.info("Starting Claude Code Voice Assistant")
 
-    # Create assistant instance
-    assistant = ClaudeCodeAssistant()
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Voice-enabled Claude Code assistant")
+    parser.add_argument('--id', '-i', type=str, help='Unique ID for the conversation. If provided and exists, will load existing conversation.')
+    parser.add_argument('--prompt', '-p', type=str, help='Initial prompt to process immediately (will be prefixed with trigger word)')
+    args = parser.parse_args()
+
+    # Create assistant instance with conversation ID and initial prompt
+    assistant = ClaudeCodeAssistant(
+        conversation_id=args.id,
+        initial_prompt=args.prompt
+    )
+
+    # Show some helpful information about the conversation
+    if args.id:
+        if assistant.conversation_file.exists():
+            log.info(f"Resuming existing conversation with ID: {args.id}")
+            console.print(f"[bold green]Resuming conversation {args.id} with {len(assistant.conversation_history)} turns[/bold green]")
+        else:
+            log.info(f"Starting new conversation with user-provided ID: {args.id}")
+            console.print(f"[bold blue]Starting new conversation with ID: {args.id}[/bold blue]")
+    else:
+        log.info(f"Starting new conversation with auto-generated ID: {assistant.conversation_id}")
+        console.print(f"[bold blue]Starting new conversation with auto-generated ID: {assistant.conversation_id}[/bold blue]")
+
+    log.info(f"Conversation will be saved to: {assistant.conversation_file}")
+    console.print(f"[bold]Conversation file: {assistant.conversation_file}[/bold]")
+
+    # Process initial prompt if provided
+    if args.prompt:
+        log.info(f"Processing initial prompt: {args.prompt}")
+        console.print(f"[bold cyan]Processing initial prompt: {args.prompt}[/bold cyan]")
+
+        # Create a full prompt that includes the trigger word to ensure it's processed
+        initial_prompt = f"{TRIGGER_WORDS[0]} {args.prompt}"
+
+        # Process the initial prompt
+        response = await assistant.process_message(initial_prompt)
+
+        # Speak the response if there is one
+        if response:
+            await assistant.speak(response)
 
     # Run the conversation loop
     await assistant.conversation_loop()

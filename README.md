@@ -104,7 +104,16 @@ You can also use [Aider](https://aider.chat/) as a programmable ai coding tool t
 ### Voice to Claude Code
 - `voice_to_claude_code.py`: A voice-enabled Claude Code assistant that allows you to interact with Claude Code using speech commands. Combines RealtimeSTT for speech recognition and OpenAI TTS for speech output.
   ```bash
-  uv run voice_to_claude_code/voice_to_claude_code.py
+  uv run voice_to_claude_code.py
+
+  # With a specific conversation ID
+  uv run voice_to_claude_code.py --id "my-chat-id"
+
+  # With an initial prompt
+  uv run voice_to_claude_code.py --prompt "create a hello world script"
+
+  # With both ID and prompt
+  uv run voice_to_claude_code.py --id "my-chat-id" --prompt "create a hello world script"
   ```
 
 ### Bonus Directory
