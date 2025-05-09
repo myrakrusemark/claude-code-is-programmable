@@ -66,7 +66,7 @@ from RealtimeSTT import AudioToTextRecorder
 import logging
 
 # Configuration - default values
-TRIGGER_WORD = "claude"
+TRIGGER_WORDS = ["claude", "cloud", "sonnet", "sonny"]  # List of possible trigger words
 STT_MODEL = "small.en"  # Options: tiny.en, base.en, small.en, medium.en, large-v2
 TTS_VOICE = "nova"  # Options: alloy, echo, fable, onyx, nova, shimmer
 DEFAULT_CLAUDE_TOOLS = ["Bash", "Edit", "Write", "GlobTool", "GrepTool", "LSTool"]
@@ -130,13 +130,7 @@ def invoke_claude_code(prompt: str) -> dict:
         log.info("Using all available tools (not restricted)")
 
         # Set up command with streaming output format
-        cmd = [
-            "claude",
-            "-p",
-            prompt,
-            "--output-format",
-            "stream-json"
-        ]
+        cmd = ["claude", "-p", prompt, "--output-format", "stream-json"]
         log.info(f"Command: {' '.join(cmd[:3])}... (truncated)")
 
         # Execute Claude Code as a subprocess with line buffering
@@ -146,7 +140,7 @@ def invoke_claude_code(prompt: str) -> dict:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=1  # Line buffered
+            bufsize=1,  # Line buffered
         )
 
         # Process and display streaming output in real-time
@@ -178,13 +172,13 @@ def invoke_claude_code(prompt: str) -> dict:
         log.info(f"Process finished with return code: {return_code}")
 
         if return_code == 0:
-            log.info(f"Claude Code succeeded, collected {len(full_output)} output lines")
-            console.print("[bold green]✅ Claude Code completed successfully[/bold green]")
-            return {
-                "success": True,
-                "message": "".join(full_output),
-                "error": None
-            }
+            log.info(
+                f"Claude Code succeeded, collected {len(full_output)} output lines"
+            )
+            console.print(
+                "[bold green]✅ Claude Code completed successfully[/bold green]"
+            )
+            return {"success": True, "message": "".join(full_output), "error": None}
         else:
             error_msg = f"Claude Code failed with exit code: {return_code}"
             log.error(f"{error_msg}\nError: {stderr[:500]}...")
@@ -213,7 +207,7 @@ class ClaudeCodeAssistant:
         log.info("Initializing Claude Code Assistant")
         self.recorder = None
         self.initial_prompt = initial_prompt
-        self.first_prompt = True  # Initialize first_prompt flag as true for first run
+        self.conversation_history = []  # Bring back conversation tracking
 
         # Set up recorder only
         self.setup_recorder()
@@ -238,7 +232,19 @@ class ClaudeCodeAssistant:
 
         log.info(f"STT recorder initialized with model {STT_MODEL}")
 
-    # Removed format_conversation_history method as we no longer track history
+    def format_conversation_history(self) -> str:
+        """Format the conversation history in the required format"""
+        if not self.conversation_history:
+            return ""
+
+        formatted_history = "# Conversation History\n\n"
+
+        for entry in self.conversation_history:
+            role = entry["role"].capitalize()
+            content = entry["content"]
+            formatted_history += f"## {role}\n{content}\n\n"
+
+        return formatted_history
 
     async def listen(self) -> str:
         """Listen for user speech and convert to text"""
@@ -345,108 +351,63 @@ class ClaudeCodeAssistant:
         """Process the user message and run Claude Code"""
         log.info(f'Processing message: "{message}"')
 
-        # Check for trigger word
-        if TRIGGER_WORD.lower() not in message.lower():
-            log.info("Trigger word not detected, skipping")
+        # Check for any trigger word in the message
+        if not any(trigger.lower() in message.lower() for trigger in TRIGGER_WORDS):
+            log.info("No trigger word detected, skipping")
             return None
 
-        # For the first prompt, don't use --continue
-        # For subsequent prompts, use --continue flag
-        if self.first_prompt:
-            # First prompt - start a new conversation
-            log.info("First prompt - starting new Claude Code session")
-            cmd = ["claude", "--output-format", "stream-json", "-p", message]
-            self.first_prompt = False  # Set to false after first run
-        else:
-            # Subsequent prompts - continue existing conversation
-            log.info("Using --continue flag to continue previous conversation")
-            cmd = ["claude", "--continue", "--output-format", "stream-json", "--print", message]
+        # Add to conversation history
+        self.conversation_history.append({"role": "user", "content": message})
 
-        # Execute Claude Code as a subprocess with streaming output
-        log.info(f"Command: {' '.join(cmd[:3])}... (truncated)")
-        log.info("Starting Claude Code subprocess with streaming output...")
+        # Prepare the prompt for Claude Code including conversation history
+        formatted_history = self.format_conversation_history()
+        prompt = f"""
+# Voice-Enabled Claude Code Assistant
 
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1  # Line buffered
-        )
+You are a helpful assistant that's being used via voice commands. Execute the user's request using your tools.
 
-        # Collect the final text response
-        final_text_response = []
-        current_message_content = []
+When asked to read files, return the entire file content.
 
-        # Process and display streaming output in real-time
+{formatted_history}
+
+Now help the user with their latest request.
+"""
+
+        # Execute Claude Code as a simple subprocess
+        log.info("Starting Claude Code subprocess...")
+        cmd = ["claude", "-p", prompt, "--allowedTools", "Bash", "Edit", "Write", "GlobTool", "GrepTool", "LSTool"]
+
         console.print("\n[bold blue]🔄 Running Claude Code...[/bold blue]")
 
-        while True:
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
+        try:
+            # Use simple subprocess.run for synchronous execution
+            process = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True
+            )
 
-            # Skip empty lines
-            if not line.strip():
-                continue
+            # Get the response
+            response = process.stdout
 
-            try:
-                # Parse the JSON line
-                json_obj = json.loads(line)
+            log.info(f"Claude Code succeeded, output length: {len(response)}")
 
-                # Display formatted JSON for debugging
-                syntax = Syntax(json.dumps(json_obj, indent=2), "json", theme="monokai", line_numbers=False)
-                console.print(syntax)
+            # Display the response
+            console.print(Panel(title="Claude Response", renderable=Markdown(response)))
 
-                # Extract and handle different types of JSON responses
-                if json_obj.get("type") == "message" and json_obj.get("role") == "assistant":
-                    # Process assistant message
-                    if "content" in json_obj:
-                        for content_item in json_obj["content"]:
-                            if content_item.get("type") == "text":
-                                # Extract text content
-                                current_message_content.append(content_item.get("text", ""))
-                                # Display the text content to the user
-                                console.print(f"[bold green]Claude:[/bold green] {content_item.get('text', '')}")
-
-                # When we get a system cost message, we know the interaction is complete
-                if json_obj.get("role") == "system" and "result" in json_obj:
-                    final_result = json_obj.get("result", "")
-                    if final_result:
-                        final_text_response.append(final_result)
-
-            except json.JSONDecodeError as e:
-                # Not valid JSON, just display the raw line
-                log.warning(f"Invalid JSON: {line.strip()}")
-                console.print(f"[yellow]{line.strip()}[/yellow]")
-
-        # Read any errors
-        stderr = process.stderr.read()
-
-        # Get return code and check result
-        return_code = process.wait()
-        log.info(f"Process finished with return code: {return_code}")
-
-        if return_code == 0:
-            # Combine all text content into a single response
-            # Use current_message_content if available, otherwise use final_text_response
-            if current_message_content:
-                response = "\n".join(current_message_content)
-            else:
-                response = "\n".join(final_text_response)
-
-            log.info(f"Claude Code succeeded, extracted text response of length: {len(response)}")
-
-            # Display the final response
-            if response:
-                console.print(Panel(title="Claude Final Response", renderable=Markdown(response)))
+            # Add to conversation history
+            self.conversation_history.append({"role": "assistant", "content": response})
 
             return response
-        else:
-            error_msg = f"Claude Code failed with exit code: {return_code}"
-            log.error(f"{error_msg}\nError: {stderr[:500]}...")
+
+        except subprocess.CalledProcessError as e:
+            error_msg = f"Claude Code failed with exit code: {e.returncode}"
+            log.error(f"{error_msg}\nError: {e.stderr[:500]}...")
 
             error_response = "I'm sorry, but I encountered an error while processing your request. Please try again."
+            self.conversation_history.append({"role": "assistant", "content": error_response})
+
             return error_response
 
     async def conversation_loop(self):
@@ -456,7 +417,7 @@ class ClaudeCodeAssistant:
         console.print(
             Panel.fit(
                 "[bold magenta]🎤 Claude Code Voice Assistant Ready[/bold magenta]\n"
-                f"Speak to interact. Include the word '{TRIGGER_WORD}' to activate.\n"
+                f"Speak to interact. Include one of these trigger words to activate: {', '.join(TRIGGER_WORDS)}.\n"
                 f"The assistant will listen, process with Claude Code, and respond using voice '{TTS_VOICE}'.\n"
                 f"STT model: {STT_MODEL}\n"
                 f"Press Ctrl+C to exit."
@@ -481,7 +442,7 @@ class ClaudeCodeAssistant:
                 else:
                     # If no trigger word, just continue listening
                     console.print(
-                        "[yellow]No trigger word detected. Continuing to listen...[/yellow]"
+                        f"[yellow]No trigger word detected. Please include one of these words: {', '.join(TRIGGER_WORDS)}. Continuing to listen...[/yellow]"
                     )
 
         except KeyboardInterrupt:
