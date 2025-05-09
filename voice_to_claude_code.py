@@ -15,6 +15,9 @@
 # ///
 
 """
+
+
+
 # Voice to Claude Code
 
 A voice-enabled Claude Code assistant that allows you to interact with Claude Code using voice commands.
@@ -26,6 +29,11 @@ This tool combines RealtimeSTT for speech recognition and OpenAI TTS for speech 
 - Text-to-speech responses using OpenAI TTS
 - Conversation history tracking
 - Voice trigger activation
+
+
+
+
+
 
 ## Requirements
 - OpenAI API key (for TTS)
