@@ -1,6 +1,8 @@
 # Claude Code is Programmable
 
-This repository demonstrates how to use Claude Code programmatically, showcasing examples in different programming languages. Watch [this video](https://youtu.be/2TIXl2rlA6Q) to understand why this is so important for next generation engineering.
+This repository demonstrates how to use Claude Code programmatically, showcasing examples in different programming languages. Watch [this video](https://youtu.be/2TIXl2rlA6Q) to understand why this is so important for next generation engineering. Check out the [voice to Claude Code](https://youtu.be/LvkZuY7rJOM) video to see how to use the `voice_to_claude_code.py` script.
+
+<img src="images/voice-to-claude-code.png" alt="Voice to Claude Code" width="800">
 
 <img src="images/programmable-agentic-coding.png" alt="Claude Code is Programmable" width="800">
 
@@ -154,6 +156,7 @@ claude -p --continue 'hello, run git ls-files, how many files are in the current
 ```
 
 ## Anthropic Web Search Tool
+> See the [anthropic_search.py](anthropic_search.py) file for more details.
 
 A command-line utility for searching the web using Anthropic's Claude AI with their web search tool capability.
 
@@ -216,3 +219,6 @@ The script produces:
 - Each search counts as one use, regardless of the number of results returned
 - Searches cost $10 per 1,000 searches, plus standard token costs for search-generated content
 - Domain filtering doesn't need https:// prefixes and automatically includes subdomains
+
+Built with ❤️ by [IndyDevDan](https://www.youtube.com/@indydevdan) with [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview), and [Principled AI Coding](https://agenticengineer.com/principled-ai-coding)
+
