@@ -4,6 +4,8 @@
 # dependencies = []
 # ///
 
+# Script that automates creating a TypeScript todo app using Aider and Git operations
+
 import subprocess
 import os
 

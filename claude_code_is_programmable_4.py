@@ -1,4 +1,5 @@
 #!/usr/bin/env -S uv run --script
+# Script demonstrating different output formats for Claude Code CLI responses with format selection options
 """
 # Programmable Claude Code script that allows different output formats
 

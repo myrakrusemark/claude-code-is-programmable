@@ -14,6 +14,8 @@
 # ]
 # ///
 
+# Voice-enabled assistant that combines speech recognition, Claude Code, and text-to-speech for voice-controlled programming
+
 """
 
 

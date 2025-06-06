@@ -8,6 +8,8 @@
 # ]
 # ///
 
+# CLI tool for searching the web using Anthropic's Claude with citation tracking and formatted output
+
 import argparse
 import os
 import json

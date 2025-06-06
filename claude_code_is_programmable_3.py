@@ -8,6 +8,8 @@
 # ]
 # ///
 
+# Notion integration script that uses Claude Code to process todos from a specified Notion page
+
 import os
 import sys
 import subprocess

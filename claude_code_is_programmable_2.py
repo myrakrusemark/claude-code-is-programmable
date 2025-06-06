@@ -1,5 +1,7 @@
 #!/usr/bin/env -S uv run --script
 
+# Script that runs Claude Code CLI to create a zero-dependency TypeScript todo app with Git operations
+
 import subprocess
 
 prompt = """

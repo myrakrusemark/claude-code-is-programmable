@@ -9,6 +9,8 @@
 # ]
 # ///
 
+# Simple starter template for connecting to Notion API via OpenAI Agents SDK and MCP server
+
 import os
 import asyncio
 from dotenv import load_dotenv

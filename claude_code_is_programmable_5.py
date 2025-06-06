@@ -1,7 +1,6 @@
 #!/usr/bin/env -S uv run --script
 
-# Summary: Script that runs Claude Code CLI with two prompts: one to read all Python files
-# and another to add summaries to each Python file, demonstrating Claude Code's programmability.
+# Two-step automation script that reads all Python files and then adds summaries to them using Claude Code CLI
 
 import subprocess
 
