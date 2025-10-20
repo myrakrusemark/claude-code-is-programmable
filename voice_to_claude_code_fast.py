@@ -3,16 +3,17 @@
 # /// script
 # requires-python = ">=3.9"
 # dependencies = [
-#   "RealtimeSTT",
+#   "faster-whisper",
 #   "python-dotenv",
 #   "rich",
 #   "numpy",
 #   "sounddevice",
 #   "soundfile",
 #   "markdown",
-#   "pvporcupine==1.9.5",
+#   "pvporcupine>=3.0.0",
 #   "tqdm>=4.66.0,<4.67.0",
 #   "anthropic",
+#   "webrtcvad",
 # ]
 # ///
 
@@ -21,23 +22,24 @@
 """
 # Voice to Claude Code (Fast)
 
-A fast voice-enabled Claude Code assistant using Piper TTS for local speech synthesis
-and Porcupine wake word detection. Efficient and runs locally!
+A fast voice-enabled Claude Code assistant using Piper TTS for local speech synthesis,
+faster-whisper for speech recognition, and Porcupine wake word detection. Efficient and runs locally!
 
 ## Features
-- Porcupine wake word detection (prevents false activations from background noise/TV)
-- Real-time speech recognition using RealtimeSTT
+- Custom "hey daisy" wake word detection using Porcupine (prevents false activations)
+- Real-time speech recognition using faster-whisper
+- Voice Activity Detection (VAD) for natural speech boundaries
 - Claude Code integration for programmable AI coding
 - Fast local text-to-speech using Piper
 - Conversation history tracking
-- No OpenAI API needed for TTS (only Anthropic for Claude)
+- No OpenAI API needed (only Anthropic for Claude)
 
 ## Requirements
 - Piper TTS installed (with en_US-amy-low.onnx model)
 - Anthropic API key (for Claude Code)
 - Python 3.9+
 - UV package manager (for dependency management)
-- Porcupine wake word detection (bundled with pvporcupine package)
+- Custom "hey daisy" wake word file (hey-daisy_en_linux_v3_0_0.ppn)
 
 ## Setup
 
@@ -52,9 +54,9 @@ pip install piper-tts
 
 The script expects Piper to be available as `piper` in PATH.
 
-### 2. Porcupine Wake Word Detection
-The pvporcupine package will be automatically installed via UV.
-It includes built-in wake word models that work locally without requiring an API key.
+### 2. Wake Word File
+Place the hey-daisy_en_linux_v3_0_0.ppn file in /home/myra/claude-assistant/
+The script will automatically load it on startup.
 
 ## Usage
 Run the script:
@@ -63,8 +65,8 @@ Run the script:
 ```
 
 **How to use:**
-1. Say "**computer**" (wake word) to activate
-2. Wait for confirmation beep/message
+1. Say "**hey daisy**" (wake word) to activate
+2. Wait for confirmation message
 3. Speak your request naturally
 4. The assistant will process and respond
 
@@ -110,11 +112,13 @@ from rich.markdown import Markdown
 from rich.logging import RichHandler
 from rich.syntax import Syntax
 from dotenv import load_dotenv
-from RealtimeSTT import AudioToTextRecorder
+from faster_whisper import WhisperModel
 import pvporcupine
 import struct
 import logging
 import anthropic
+import webrtcvad
+import collections
 
 # Configuration - default values
 TRIGGER_WORDS = ["claude", "cloud", "sonnet", "sonny"]  # List of possible trigger words
@@ -130,6 +134,13 @@ DEFAULT_CLAUDE_TOOLS = [
     "LSTool",
     "Replace",
 ]
+
+# Sound files
+SOUND_WAKEWORD = Path(__file__).parent / "sounds" / "wake-word.mp3"
+SOUND_WAKE = Path(__file__).parent / "sounds" / "wake.mp3"
+SOUND_TOOL = Path(__file__).parent / "sounds" / "tool.mp3"
+SOUND_WAIT = Path(__file__).parent / "sounds" / "wait.mp3"
+SOUND_SLEEP = Path(__file__).parent / "sounds" / "sleep.mp3"
 
 # Prompt templates
 CLAUDE_PROMPT = """
@@ -165,13 +176,8 @@ logging.basicConfig(
 )
 log = logging.getLogger("claude_code_assistant")
 
-# Suppress RealtimeSTT logs and all related loggers
-logging.getLogger("RealtimeSTT").setLevel(logging.ERROR)
-logging.getLogger("transcribe").setLevel(logging.ERROR)
+# Suppress faster_whisper logs
 logging.getLogger("faster_whisper").setLevel(logging.ERROR)
-logging.getLogger("audio_recorder").setLevel(logging.ERROR)
-logging.getLogger("whisper").setLevel(logging.ERROR)
-logging.getLogger("faster_whisper.transcribe").setLevel(logging.ERROR)
 
 console = Console()
 
@@ -197,8 +203,9 @@ class ClaudeCodeAssistant:
         working_directory: Optional[str] = None,
     ):
         log.info("Initializing Claude Code Assistant (Fast Mode)")
-        self.recorder = None
         self.porcupine = None
+        self.whisper_model = None
+        self.vad = None
         self.initial_prompt = initial_prompt
         self.working_directory = working_directory
         self.last_interaction_time = None  # Track last interaction time
@@ -266,6 +273,14 @@ class ClaudeCodeAssistant:
     def setup_porcupine(self):
         """Initialize Porcupine wake word detection"""
         try:
+            # Get Porcupine access key from environment
+            access_key = os.environ.get("PORCUPINE_ACCESS_KEY")
+            if not access_key:
+                console.print("[bold red]Error: PORCUPINE_ACCESS_KEY not found in environment[/bold red]")
+                console.print("Please set PORCUPINE_ACCESS_KEY in your .env file")
+                console.print("Get a free key from: https://console.picovoice.ai/")
+                sys.exit(1)
+
             # Try to use custom "hey daisy" wake word (Linux version)
             custom_wake_word = "/home/myra/claude-assistant/hey-daisy_en_linux_v3_0_0.ppn"
 
@@ -273,6 +288,7 @@ class ClaudeCodeAssistant:
                 try:
                     log.info(f"Attempting to use custom wake word file: {custom_wake_word}")
                     self.porcupine = pvporcupine.create(
+                        access_key=access_key,
                         keyword_paths=[custom_wake_word]
                     )
                     self.wake_word_name = "hey daisy"
@@ -282,6 +298,7 @@ class ClaudeCodeAssistant:
                     log.info("Falling back to built-in 'jarvis' wake word")
                     # Use built-in "jarvis" keyword as fallback (better than "computer")
                     self.porcupine = pvporcupine.create(
+                        access_key=access_key,
                         keywords=["jarvis"]
                     )
                     self.wake_word_name = "jarvis"
@@ -291,6 +308,7 @@ class ClaudeCodeAssistant:
                 # Available keywords: alexa, americano, blueberry, bumblebee, computer, grapefruit,
                 # grasshopper, hey google, hey siri, jarvis, ok google, picovoice, porcupine, terminator
                 self.porcupine = pvporcupine.create(
+                    access_key=access_key,
                     keywords=["jarvis"]
                 )
                 self.wake_word_name = "jarvis"
@@ -369,24 +387,25 @@ class ClaudeCodeAssistant:
         self.last_interaction_time = current_time
 
     def setup_recorder(self):
-        """Set up the RealtimeSTT recorder"""
-        log.info(f"Setting up STT recorder with model {STT_MODEL}")
+        """Set up the faster-whisper model"""
+        log.info(f"Setting up STT with faster-whisper model {STT_MODEL}")
 
-        self.recorder = AudioToTextRecorder(
-            model=STT_MODEL,
-            language="en",
-            compute_type="float32",
-            post_speech_silence_duration=0.8,
-            beam_size=5,
-            initial_prompt=None,
-            spinner=False,
-            print_transcription_time=False,
-            enable_realtime_transcription=True,
-            realtime_model_type="tiny.en",
-            realtime_processing_pause=0.4,
+        # Initialize faster-whisper model
+        self.whisper_model = WhisperModel(
+            STT_MODEL,
+            device="cpu",  # Use "cuda" if you have GPU
+            compute_type="int8"  # Efficient CPU inference
         )
 
-        log.info(f"STT recorder initialized with model {STT_MODEL}")
+        # Initialize VAD for voice activity detection
+        self.vad = webrtcvad.Vad(2)  # Aggressiveness: 0-3 (2 is moderate)
+
+        # Audio recording parameters
+        self.sample_rate = 16000  # Whisper expects 16kHz
+        self.frame_duration_ms = 30  # VAD frame duration in ms
+        self.frame_size = int(self.sample_rate * self.frame_duration_ms / 1000)
+
+        log.info(f"STT initialized with faster-whisper model {STT_MODEL}")
 
     def setup_sigint_handler(self):
         """Set up SIGINT (Ctrl+C) handler for returning to wake word"""
@@ -405,12 +424,11 @@ class ClaudeCodeAssistant:
             console.print("\n[bold yellow]⏹  Returning to wake word... (Press Ctrl+C again within 2 seconds to exit)[/bold yellow]")
             self.interrupt_tts()
 
-            # Stop the recorder if it's listening
-            if hasattr(self, "recorder") and self.recorder:
-                try:
-                    self.recorder.abort()
-                except:
-                    pass
+            # Stop any audio recording
+            try:
+                sd.stop()
+            except:
+                pass
 
         signal.signal(signal.SIGINT, sigint_handler)
         log.info("SIGINT handler set up (Ctrl+C to return to wake word, Ctrl+C twice to exit)")
@@ -451,6 +469,9 @@ class ClaudeCodeAssistant:
             audio_stream.start()
             console.print(f"[dim]Listening for wake word '{self.wake_word_name}'... (Press Ctrl+C to return to wake word anytime)[/dim]")
 
+            # Play sleep sound when returning to wake word listening
+            self.play_sound(SOUND_SLEEP, wait=False)
+
             while True:
                 # Read audio frame
                 pcm, overflowed = audio_stream.read(self.porcupine.frame_length)
@@ -469,6 +490,8 @@ class ClaudeCodeAssistant:
                     console.print("[bold green]✓ Wake word detected![/bold green]")
                     audio_stream.stop()
                     audio_stream.close()
+                    # Play wake word sound without blocking
+                    self.play_sound(SOUND_WAKEWORD, wait=False)
                     return True
 
                 # Small sleep to prevent CPU spinning
@@ -487,7 +510,7 @@ class ClaudeCodeAssistant:
             return False
 
     async def listen(self) -> str:
-        """Listen for user speech and convert to text"""
+        """Listen for user speech and convert to text using faster-whisper"""
         log.info("Listening for speech...")
 
         # If this is the first call and we have an initial prompt, use it instead of recording
@@ -504,50 +527,130 @@ class ClaudeCodeAssistant:
 
             return prompt
 
-        # Set up realtime display
-        def on_realtime_update(text):
-            # Clear line and update realtime text
-            sys.stdout.write("\r\033[K")  # Clear line
-            sys.stdout.write(f"Listening: {text}")
-            sys.stdout.flush()
+        console.print("[dim]Listening... (speak now)[/dim]")
 
-        self.recorder.on_realtime_transcription_update = on_realtime_update
+        # Play wake sound and wait for it to finish
+        self.play_sound(SOUND_WAKE, wait=True)
 
-        # Create a synchronization object for the callback
-        result_container = {"text": "", "done": False}
+        try:
+            # Record audio with VAD
+            audio_chunks = []
+            silence_threshold = 30  # frames of silence before stopping
+            silence_count = 0
+            speech_started = False
 
-        def callback(text):
-            if text:
-                console.print("")
-                console.print(
-                    Panel(title="You", title_align="left", renderable=Markdown(text))
-                )
-                log.info(f'Heard: "{text}"')
-                result_container["text"] = text
+            # Open audio stream
+            audio_stream = sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=1,
+                dtype='int16',
+                blocksize=self.frame_size
+            )
 
-            result_container["done"] = True
+            audio_stream.start()
 
-        # Get text with callback
-        self.recorder.text(callback)
+            # Record until silence is detected after speech
+            while True:
+                # Check if user pressed Ctrl+C to return to wake word
+                if self.stop_speaking:
+                    log.info("Ctrl+C detected during listening - aborting")
+                    audio_stream.stop()
+                    audio_stream.close()
+                    return ""
 
-        # Wait for result with a simple polling loop
-        timeout = 60  # seconds
-        wait_interval = 0.1  # seconds
-        elapsed = 0
+                # Read audio frame
+                frame, overflowed = audio_stream.read(self.frame_size)
+                if overflowed:
+                    log.warning("Audio buffer overflow")
 
-        while not result_container["done"] and elapsed < timeout:
-            # Check if user pressed Ctrl+C to return to wake word
-            if self.stop_speaking:
-                log.info("Ctrl+C detected during listening - aborting")
+                frame = frame.flatten()
+                audio_chunks.append(frame)
+
+                # Convert to bytes for VAD
+                frame_bytes = frame.tobytes()
+
+                # Check if frame contains speech
+                try:
+                    is_speech = self.vad.is_speech(frame_bytes, self.sample_rate)
+                except:
+                    # If VAD fails, assume it's speech
+                    is_speech = True
+
+                if is_speech:
+                    speech_started = True
+                    silence_count = 0
+                    sys.stdout.write("\r\033[K")  # Clear line
+                    sys.stdout.write("Listening: [speaking detected]")
+                    sys.stdout.flush()
+                elif speech_started:
+                    silence_count += 1
+                    if silence_count >= silence_threshold:
+                        # Silence detected after speech, stop recording
+                        break
+
+                # Timeout after 10 seconds
+                if len(audio_chunks) > self.sample_rate * 10 / self.frame_size:
+                    break
+
+                await asyncio.sleep(0.001)
+
+            audio_stream.stop()
+            audio_stream.close()
+
+            if not speech_started:
+                console.print("\n[yellow]No speech detected[/yellow]")
                 return ""
-            await asyncio.sleep(wait_interval)
-            elapsed += wait_interval
 
-        if elapsed >= timeout:
-            log.warning("Timeout waiting for speech")
+            # Concatenate audio chunks
+            audio_data = np.concatenate(audio_chunks)
+            audio_float = audio_data.astype(np.float32) / 32768.0  # Convert to float32
+
+            # Transcribe with faster-whisper
+            console.print("\n[dim]Transcribing...[/dim]")
+            segments, info = self.whisper_model.transcribe(
+                audio_float,
+                language="en",
+                beam_size=5,
+                vad_filter=True
+            )
+
+            # Collect transcription
+            transcription = " ".join([segment.text for segment in segments]).strip()
+
+            if transcription:
+                console.print(
+                    Panel(title="You", title_align="left", renderable=Markdown(transcription))
+                )
+                log.info(f'Heard: "{transcription}"')
+                return transcription
+            else:
+                console.print("\n[yellow]No speech recognized[/yellow]")
+                return ""
+
+        except Exception as e:
+            log.error(f"Error during speech recognition: {e}")
+            console.print(f"\n[red]Error during speech recognition: {e}[/red]")
             return ""
 
-        return result_container["text"]
+    def play_sound(self, sound_path: Path, wait: bool = True):
+        """Play a sound effect using ffmpeg and sounddevice"""
+        try:
+            if sound_path.exists():
+                # Use ffmpeg to decode MP3 to WAV format in memory
+                result = subprocess.run(
+                    ['ffmpeg', '-i', str(sound_path), '-f', 'wav', '-'],
+                    capture_output=True,
+                    check=True
+                )
+                # Read the WAV data
+                import io
+                audio_data, sample_rate = sf.read(io.BytesIO(result.stdout))
+                # Play the sound
+                sd.play(audio_data, sample_rate)
+                if wait:
+                    sd.wait()  # Wait for sound to finish
+        except Exception as e:
+            log.debug(f"Error playing sound {sound_path}: {e}")
 
     def interrupt_tts(self):
         """Interrupt current TTS playback"""
@@ -775,6 +878,9 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                                 tool_name = item.get("name", "unknown")
                                 tool_input = item.get("input", {})
 
+                                # Play tool sound without blocking
+                                self.play_sound(SOUND_TOOL, wait=False)
+
                                 # Format tool message with key details
                                 if tool_name == "Bash" and "command" in tool_input:
                                     tool_msg = f"[Using {tool_name} ({tool_input['command']})]"
@@ -800,7 +906,6 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                             if item.get("type") == "tool_result":
                                 tool_msg = "[Tool completed]"
                                 console.print(f"[dim green]{tool_msg}[/dim green]")
-                                await self.speak_line("Complete", interrupt_previous=True)
 
                     # Collect all events for debugging
                     full_response.append(event)
@@ -927,12 +1032,11 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
         finally:
             # Safe cleanup
             try:
-                if hasattr(self, "recorder") and self.recorder:
-                    # Shutdown the recorder properly
-                    self.recorder.shutdown()
                 if hasattr(self, "porcupine") and self.porcupine:
                     # Shutdown Porcupine properly
                     self.porcupine.delete()
+                # Stop any audio
+                sd.stop()
             except Exception as shutdown_error:
                 log.error(f"Error during shutdown: {str(shutdown_error)}")
 
